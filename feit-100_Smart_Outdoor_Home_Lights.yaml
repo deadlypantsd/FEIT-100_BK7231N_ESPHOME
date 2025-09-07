@@ -1,0 +1,163 @@
+esphome:
+  name: feit-100_smart_outdoor_home_lights
+  platform: bk72XX
+  board: cbu
+  includes:
+    - feit-100/rgb-rainbow.h
+    - feit-100/white-only.h
+
+  on_boot:
+    priority: 600
+    then:
+      - delay: 2s  # wait for the light object to initialize
+      - lambda: |-
+          if (id(first_boot)) {
+            // Set default effect to Whites
+            id(last_effect) = "Whites";
+
+            // Turn on the light with the default effect
+            auto call = id(feit-100_smart_outdoor_home_lights).turn_on();
+            call.set_effect("Whites");
+            call.set_brightness(0.5);  # optional default brightness
+            call.perform();
+
+            // Clear first boot flag
+            id(first_boot) = false;
+          }
+
+logger:
+
+api:
+  encryption:
+    key: !secret esphome_encryption_key
+
+ota:
+  - platform: esphome
+    password: !secret esphome_ota_key
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+globals:
+  - id: rgb_brightness
+    type: float
+    restore_value: yes
+    initial_value: "1.0"
+
+  - id: warm_white_brightness
+    type: float
+    restore_value: yes
+    initial_value: "1.0"
+
+  - id: cold_white_brightness
+    type: float
+    restore_value: yes
+    initial_value: "1.0"
+
+  - id: last_effect
+    type: std::string
+    restore_value: yes
+    initial_value: '"Whites"'  # default effect on first boot
+
+  - id: first_boot
+    type: bool
+    restore_value: yes
+    initial_value: 'true'
+
+
+light:
+  - platform: beken_spi_led_strip
+    chipset: ws2812
+    pin: P16
+    num_leds: 160
+    id: feit-100_smart_outdoor_home_lights
+    restore_mode: ALWAYS_OFF
+    internal: true
+    gamma_correct: 0.75
+    rgb_order: RGB
+    effects:
+
+      - addressable_lambda:
+          name: "Rainbow"
+          update_interval: 50ms
+          lambda: |-
+            static auto *rainbow = new light::RainbowEffect();
+            rainbow->apply(it, current_color);
+
+      - addressable_lambda:
+          name: "Whites"
+          update_interval: 50ms
+          lambda: |-
+            static auto *whites = new light::WhitesEffect();
+            whites->apply(it, current_color);
+
+switch:
+  - platform: template
+    name: "Power"
+    id: feit-100_smart_oudoor_home_lights_power
+    lambda: |-
+      return id(feit-100_smart_outdoor_home_lights).current_values.is_on();
+    turn_on_action:
+      - lambda: |-
+          auto call = id(feit-100_smart_outdoor_home_lights).turn_on();
+          call.set_effect(id(last_effect).c_str());
+          call.perform();
+    turn_off_action:
+      - lambda: |-
+          auto call = id(feit-100_smart_outdoor_home_lights).turn_off();
+          call.perform();
+
+
+select:
+  - platform: template
+    name: "Light Effect"
+    id: feit-100_smart_outdoor_home_lights_effect
+    options:
+      - Rainbow
+      - Whites
+    initial_option: "Whites"
+    optimistic: true
+    set_action:
+      - lambda: |-
+          id(last_effect) = x;  # save the  last chosen effect
+          auto call = id(feit-100_smart_outdoor_home_lights).turn_on();
+          call.set_effect(x.c_str());
+          call.perform();
+
+number:
+  - platform: template
+    name: "RGB Brightness"
+    id: rgb_brightness_slider
+    min_value: 0
+    max_value: 100
+    step: 1
+    initial_value: 100
+    optimistic: true
+    set_action:
+      - lambda: |-
+          id(rgb_brightness) = x / 100.0f;
+
+  - platform: template
+    name: "Warm White Brightness"
+    id: warm_white_slider
+    min_value: 0
+    max_value: 100
+    step: 1
+    initial_value: 100
+    optimistic: true
+    set_action:
+      - lambda: |-
+          id(warm_white_brightness) = x / 100.0f;
+
+  - platform: template
+    name: "Cold White Brightness"
+    id: cold_white_slider
+    min_value: 0
+    max_value: 100
+    step: 1
+    initial_value: 100
+    optimistic: true
+    set_action:
+      - lambda: |-
+          id(cold_white_brightness) = x / 100.0f;
